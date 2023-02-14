@@ -26,4 +26,22 @@ navigator.sendBeacon = (...params) => {
 const observer2 = new PerformanceObserver((entries) => {
     entries.getEntriesByType("resource").forEach(res => console.log(res.toJSON()))
 });
-observer2.observe({ entryTypes: ["resource"] });
+observer2.observe({entryTypes: ["resource"]});
+
+function observeElementMutations() {
+    const targetNode = document
+
+    const config = {childList: true, subtree: true};
+
+    const callback = (mutationList, observer) => {
+        const matches = mutationList.flatMap(({addedNodes}) => [...addedNodes])
+            .map(node => node.outerHTML)
+            .filter(html => !!html)
+            .flatMap(html => [...html.matchAll(/src="([^"]*)"/g)].map(x => x[1]))
+        console.log(matches)
+    };
+
+    const observer = new MutationObserver(callback);
+    observer.observe(targetNode, config);
+    return observer.disconnect
+}
