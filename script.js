@@ -3,13 +3,12 @@ const originalTrigger = utag.o["woolworths.supermarkets"].handler.trigger;
 const handler = utag.o["woolworths.supermarkets"].handler
 
 handler.trigger = (...triggerParams) => {
-    console.log(triggerParams)
+    console.log("trigger", triggerParams)
 
     const originalSends = Object.entries(utag.sender).map(([key, sender]) => {
         const originalSend = sender.send
         sender.send = (...sendParams) => {
             const closeObserver = observeRequests()
-            console.log("test", sendParams)
             originalSend(...sendParams)
             closeObserver()
         }
@@ -23,9 +22,11 @@ handler.trigger = (...triggerParams) => {
     })
 }
 
-function observeRequests() {
-    const {fetch: originalFetch} = window;
+const {fetch: originalFetch} = window;
+const originalHttpRequest = XMLHttpRequest.prototype.open;
+const {sendBeacon: originalSendBeacon} = navigator
 
+function observeRequests() {
     window.fetch = async (...args) => {
         let [resource, config] = args;
         // request interceptor here
@@ -35,46 +36,38 @@ function observeRequests() {
         return response;
     };
 
-    var origOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function () {
         console.log('xhr request', arguments);
-        origOpen.apply(this, arguments);
+        originalHttpRequest.apply(this, arguments);
     };
 
-    const {sendBeacon: originalSendBeacon} = navigator
     navigator.sendBeacon = (...params) => {
         console.log("send beacon", params)
         originalSendBeacon(...params)
     }
 
-    const disconnectMutations = observeElementMutations()
+    const disconnectOtherRequests = observeOtherRequests()
 
     return () => {
         navigator.sendBeacon = originalSendBeacon;
-        XMLHttpRequest.prototype.open = origOpen
+        XMLHttpRequest.prototype.open = originalHttpRequest
         window.fetch = originalFetch
-        disconnectMutations()
+        disconnectOtherRequests()
     }
 }
 
-function observeElementMutations() {
-    const targetNode = document
-
-    const config = {childList: true, subtree: true};
-
-    const urls = new Set()
-    const callback = (mutationList, observer) => {
-        const matches = mutationList.flatMap(({addedNodes}) => [...addedNodes])
-            .map(node => node.outerHTML)
-            .filter(html => !!html)
-            .flatMap(html => [...html.matchAll(/src="([^"]*)"/g)].map(x => x[1]))
-        matches.forEach(url => urls.add(url))
-    };
-
-    const observer = new MutationObserver(callback);
-    observer.observe(targetNode, config);
+function observeOtherRequests() {
+    let endTime;
+    const startTime = performance.mark("start-time").startTime;
+    const observer = new PerformanceObserver((entries) => {
+        entries.getEntriesByType("resource")
+            .map(res => res.toJSON())
+            .filter(val => val.startTime >= startTime && (!endTime || val.startTime <= endTime))
+            .forEach(val => console.log(val))
+    });
+    observer.observe({entryTypes: ["resource"]});
     return () => {
-        console.log("result", [...urls])
-        observer.disconnect()
+        endTime = performance.mark("end-time").startTime
+        setTimeout(() => observer.disconnect(), 10000)
     }
 }
