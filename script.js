@@ -8,6 +8,7 @@ handler.trigger = (...triggerParams) => {
     const originalSends = Object.entries(utag.sender).map(([key, sender]) => {
         const originalSend = sender.send
         sender.send = (...sendParams) => {
+            console.log("send")
             const closeObserver = observeRequests()
             originalSend(...sendParams)
             closeObserver()
@@ -59,15 +60,19 @@ function observeRequests() {
 function observeOtherRequests() {
     let endTime;
     const startTime = performance.mark("start-time").startTime;
+    const objects = new Set()
     const observer = new PerformanceObserver((entries) => {
         entries.getEntriesByType("resource")
             .map(res => res.toJSON())
             .filter(val => val.startTime >= startTime && (!endTime || val.startTime <= endTime))
-            .forEach(val => console.log(val))
+            .forEach(val => objects.add(val.value.name))
     });
     observer.observe({entryTypes: ["resource"]});
     return () => {
         endTime = performance.mark("end-time").startTime
-        setTimeout(() => observer.disconnect(), 10000)
+        setTimeout(() => {
+            console.log([...objects])
+            observer.disconnect();
+        }, 5000)
     }
 }
